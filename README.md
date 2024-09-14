@@ -53,7 +53,8 @@ Ensure you have the following software installed:
     yarn dev
     ```
 
-    The application should now be running at `http://localhost:3000`.
+    The backend should now be running at `http://localhost:3000`.
+    The frontend should now be running at `http://localhost:5173`.
 
 ## Folder Structure
 
