@@ -3,7 +3,7 @@ import React from "react";
 import { Formik, Field, Form, ErrorMessage } from "formik";
 import * as Yup from "yup";
 import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, getDoc, doc, query, where, getDocs } from "firebase/firestore";
 import { auth, db, provider } from "../firebase/firebase";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
@@ -38,46 +38,144 @@ const RegistrationForm = () => {
 
   const addUserToFirestore = async (userData) => {
     try {
-      await addDoc(collection(db, "registeredUsers"), userData);
+      // Add user data to Firestore and get the document reference
+      const docRef = await addDoc(collection(db, "registeredUsers"), userData);
+
+      // Fetch the newly created document using its ID
+      const userDoc = await getDoc(doc(db, "registeredUsers", docRef.id));
+
+      if (userDoc.exists()) {
+        const registeredUserData = userDoc.data();
+        // Log the registered user data
+        console.log("Registered user data:", registeredUserData);
+      } else {
+        console.error("No such document!");
+      }
     } catch (error) {
       console.error("Error adding user to Firestore:", error);
       throw error; // Re-throwing error to be caught by toast.promise
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    toast.promise(
-      async () => {
-        // Perform Google sign-in
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
+  const getUserData = async (email) => {
+    const usersCollection = collection(db, "registeredUsers");
+    const q = query(usersCollection, where("email", "==", email));
+    const querySnapshot = await getDocs(q);
 
-        // Define user data
-        const userData = {
-          uid: user.uid,
-          name: user.displayName || "No Name",
-          email: user.email,
-          role: "student", //by default role will be student
-          createdAt: new Date(),
-        };
+    return querySnapshot;
+  };
 
-        // Add user data to Firestore
-        await addUserToFirestore(userData);
+  const registerUser = async (userData) => {
+    try {
+      await addDoc(collection(db, "registeredUsers"), userData);
+      const querySnapshot = await getUserData(userData.email);
 
+      if (!querySnapshot.empty) {
+        // Get the user data
+        const registeredUserData = querySnapshot.docs[0].data();
+        sessionStorage.setItem("user", registeredUserData);
+      }
+    } catch (error) {
+      console.error("Error registering user:", error);
+      toast.error("Error registering user.");
+      throw error;
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    try {
+      // Perform Google sign-in
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Define user data
+      const userData = {
+        uid: user.uid,
+        name: user.displayName || "No Name",
+        email: user.email,
+        role: "student", // Default role
+        createdAt: new Date(),
+      };
+
+      // Check if the user already exists
+      const querySnapshot = await getUserData(user.email);
+
+      if (!querySnapshot.empty) {
+        // User with the email already exists
+        const existingUserDoc = querySnapshot.docs[0];
+        const existingUserData = existingUserDoc.data();
+        console.log("Existing user data:", existingUserData);
+
+        sessionStorage.setItem("user", existingUserData);
         // Dispatch login action
         dispatch(
           login({
             user: {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName,
+              uid: existingUserData.uid,
+              email: existingUserData.email,
+              displayName: existingUserData.name,
             },
-            role: "user", // Adjust this based on your user roles logic
+            role: existingUserData.role, // Use the existing role
           })
         );
-
-        // Navigate to dashboard
         navigate("/dashboard");
+        // Display toast message
+        toast.success("User already registered. Logging in...");
+
+        // Exit the function as no further action is needed
+        return;
+      }
+
+      // Email does not exist, register the user
+      await toast.promise(registerUser(userData), {
+        pending: "Loading...",
+        success: "Registration successful",
+        error: "Registration failed",
+      });
+
+      // Dispatch login action
+      dispatch(
+        login({
+          user: {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+          },
+          role: "student", // Default role for new users
+        })
+      );
+
+      // Navigate to dashboard
+      navigate("/dashboard");
+    } catch (error) {
+      // Handle errors
+      toast.error("An error occurred");
+    }
+  };
+
+  const handleSubmit = async (values, { setSubmitting, resetForm }) => {
+    const { name, email, password, role } = values;
+
+    toast.promise(
+      async () => {
+        // Create user in Firebase Authentication
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // Define user data
+        const userData = {
+          uid: user.uid,
+          name,
+          email,
+          role,
+          createdAt: new Date(),
+        };
+
+        // Save user data in Firestore
+        await addUserToFirestore(userData);
+        resetForm();
+
+        setSubmitting(false);
       },
       {
         pending: "Logging in...",
@@ -85,36 +183,6 @@ const RegistrationForm = () => {
         error: "Login Unsuccessful",
       }
     );
-  };
-
-  const handleSubmit = async (values, { setSubmitting, resetForm }) => {
-    const { name, email, password, role } = values;
-
-    try {
-      // Create user in Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Define user data
-      const userData = {
-        uid: user.uid,
-        name,
-        email,
-        role,
-        createdAt: new Date(),
-      };
-
-      // Save user data in Firestore
-      await addUserToFirestore(userData);
-
-      alert("User registered successfully!");
-      resetForm();
-    } catch (error) {
-      console.error("Error registering user:", error);
-      alert(error.message);
-    }
-
-    setSubmitting(false);
   };
 
   return (
@@ -250,7 +318,7 @@ const RegistrationForm = () => {
             {/* Google Sign-In Button */}
             <div className="w-full flex justify-center mt-4">
               <button
-                onClick={handleGoogleSignIn}
+                onClick={handleGoogleSignUp}
                 className="flex items-center bg-white border border-gray-300 rounded-lg shadow-md px-6 py-2 hover:bg-gray-100"
               >
                 <svg

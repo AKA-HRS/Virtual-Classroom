@@ -15,6 +15,7 @@ import AdminPage from "./pages/AdminPage";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
 import RegistrationForm from "./pages/RegistrationForm";
 import { ToastContainer } from "react-toastify";
+import UserProfile from "./pages/UserProfile";
 
 const App = () => (
   <Provider store={store}>
@@ -27,6 +28,7 @@ const App = () => (
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<AppLayout />}>
               <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="profile" element={<UserProfile />} />
               <Route
                 path="admin"
                 element={

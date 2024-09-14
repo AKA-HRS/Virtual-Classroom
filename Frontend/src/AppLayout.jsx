@@ -1,6 +1,6 @@
 // components/AppLayout.js
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 
 const AppLayout = ({ children }) => {
@@ -28,8 +28,9 @@ const AppLayout = ({ children }) => {
           </ul>
         </nav>
       </aside>
-      <main className="flex-1 p-6">{children}</main>
-    
+      <main className="flex-1 p-6">
+        <Outlet />
+      </main>
     </div>
   );
 };
